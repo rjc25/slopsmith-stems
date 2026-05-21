@@ -1,0 +1,16 @@
+{
+  "id": "multiplayer",
+  "name": "Multiplayer",
+  "version": "1.0.0",
+  "private": false,
+  "description": "WebSocket-based multiplayer for full-band sessions. Create rooms, pick instruments, sync playback, and play together with split-screen highways.",
+  "script": "screen.js",
+  "routes": "routes.py",
+  "nav": {
+    "label": "Multiplayer",
+    "icon": "users"
+  },
+  "settings": {
+    "html": "screen.html"
+  }
+}

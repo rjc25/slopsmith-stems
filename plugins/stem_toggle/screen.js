@@ -392,6 +392,41 @@
       unloadStems();
       hideUI();
     });
+
+    // ── Cross-Plugin Stem Control ──
+    // Other plugins can request stem mute/unmute via the event bus.
+    // drum_highway emits stems:mute for drums, vocal_highway for vocals,
+    // multiplayer mutes each player's instrument stem.
+
+    window.slopsmith.on("stems:mute", ({ stem }) => {
+      if (stemStates[stem]) {
+        stemStates[stem].active = false;
+        const audio = stemAudios[stem];
+        if (audio) fadeVolume(audio, 0, FADE_MS);
+        updateUI();
+        console.log(`[StemToggle] External mute: ${stem}`);
+      }
+    });
+
+    window.slopsmith.on("stems:unmute", ({ stem }) => {
+      if (stemStates[stem]) {
+        stemStates[stem].active = true;
+        const audio = stemAudios[stem];
+        if (audio) fadeVolume(audio, 1.0, FADE_MS);
+        updateUI();
+        console.log(`[StemToggle] External unmute: ${stem}`);
+      }
+    });
+
+    window.slopsmith.on("stems:set", ({ stem, active }) => {
+      if (stemStates[stem]) {
+        stemStates[stem].active = active;
+        const audio = stemAudios[stem];
+        if (audio) fadeVolume(audio, active ? 1.0 : 0, FADE_MS);
+        updateUI();
+        console.log(`[StemToggle] External set: ${stem} = ${active ? "ON" : "OFF"}`);
+      }
+    });
   }
 
   // Register keyboard handler

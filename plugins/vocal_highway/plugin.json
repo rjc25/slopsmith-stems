@@ -1,0 +1,13 @@
+{
+  "id": "vocal_highway",
+  "name": "Vocal Highway",
+  "version": "1.0.0",
+  "private": false,
+  "type": "visualization",
+  "description": "YARC-style vocal highway with pitch detection. Displays scrolling lyrics with pitch tubes and real-time microphone input scoring via Web Audio API.",
+  "script": "screen.js",
+  "routes": "routes.py",
+  "settings": {
+    "html": "settings.html"
+  }
+}

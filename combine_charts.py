@@ -307,11 +307,86 @@ def combine(cdlc_path: Path, ch_path: Path, stems_path: Path, output_path: Path)
 
             manifest["sources"]["clonehero"] = str(ch_path.name)
         elif chart_file and chart_file.suffix == ".mid":
-            print(f"  MIDI chart found — .mid parsing not yet implemented, copy as-is")
-            drums_dest = output_path / "drums"
-            drums_dest.mkdir(exist_ok=True)
-            shutil.copy2(chart_file, drums_dest / chart_file.name)
-            manifest["sources"]["clonehero"] = str(ch_path.name)
+            try:
+                from midi_parser import parse_midi_drums, convert_to_timed
+
+                print(f"  Parsing MIDI chart: {chart_file.name}")
+                midi_chart = parse_midi_drums(chart_file)
+                ini_meta = {}
+                ini_path = ch_path / "song.ini"
+                if ini_path.exists():
+                    ini_meta = parse_song_ini(ini_path)
+
+                # Convert drum notes to timed format
+                drums_timed = {}
+                for diff in ["expert", "hard", "medium", "easy"]:
+                    notes = convert_to_timed(midi_chart, diff)
+                    if notes:
+                        drums_timed[diff] = notes
+                        print(f"  Drums ({diff}): {len(notes)} notes")
+
+                # Auto-sync (same logic as .chart path above)
+                sync_offset = 0.0
+                ch_audio = None
+                ref_audio = None
+
+                for ext in [".ogg", ".mp3", ".wav", ".opus"]:
+                    candidate = ch_path / f"song{ext}"
+                    if candidate.exists():
+                        ch_audio = candidate
+                        break
+
+                if stems_path:
+                    for ext in [".mp3", ".ogg", ".wav"]:
+                        candidate = stems_path / f"original{ext}"
+                        if candidate.exists():
+                            ref_audio = candidate
+                            break
+                    if not ref_audio:
+                        for ext in [".mp3", ".ogg", ".wav"]:
+                            candidate = stems_path / f"guitar{ext}"
+                            if candidate.exists():
+                                ref_audio = candidate
+                                break
+
+                if ch_audio and ref_audio:
+                    try:
+                        from audio_sync import find_offset_chunked, apply_offset_to_chart
+                        print(f"\n  Auto-syncing: {ch_audio.name} -> {ref_audio.name}")
+                        sync_offset = find_offset_chunked(str(ref_audio), str(ch_audio))
+                        print(f"  Sync offset: {sync_offset:+.4f}s")
+                        drums_timed = apply_offset_to_chart({"drums": drums_timed}, sync_offset)["drums"]
+                        print(f"  Applied offset to all drum charts")
+                    except ImportError:
+                        print("  Warning: numpy not available, skipping auto-sync")
+                    except Exception as e:
+                        print(f"  Warning: Auto-sync failed ({e}), using raw chart timing")
+                else:
+                    print("  Note: No audio pair found for auto-sync, using raw chart timing")
+
+                # Save parsed drum data
+                drums_dest = output_path / "drums"
+                drums_dest.mkdir(exist_ok=True)
+
+                (drums_dest / "chart_data.json").write_text(json.dumps({
+                    "metadata": {**midi_chart["metadata"], **ini_meta},
+                    "sync_track": midi_chart["sync_track"],
+                    "drums": drums_timed,
+                    "sync_offset_applied": sync_offset,
+                }, indent=2))
+
+                shutil.copy2(chart_file, drums_dest / chart_file.name)
+                if ini_path.exists():
+                    shutil.copy2(ini_path, drums_dest / "song.ini")
+
+                manifest["sources"]["clonehero"] = str(ch_path.name)
+
+            except ImportError:
+                print(f"  Warning: mido not installed, copying .mid as-is (pip install mido)")
+                drums_dest = output_path / "drums"
+                drums_dest.mkdir(exist_ok=True)
+                shutil.copy2(chart_file, drums_dest / chart_file.name)
+                manifest["sources"]["clonehero"] = str(ch_path.name)
         else:
             print(f"  Warning: No chart file found in {ch_path}")
 

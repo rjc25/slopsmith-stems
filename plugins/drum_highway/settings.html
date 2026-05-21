@@ -29,24 +29,350 @@
       <span style="color:#00FF00">&#9679; Floor Tom</span>
     </div>
   </div>
+
+  <!-- MIDI Learn Section -->
+  <div class="mt-6 pt-4 border-t border-gray-700">
+    <h3 class="text-sm font-bold mb-2">MIDI Mapping</h3>
+    <p class="text-xs text-gray-500 mb-3">
+      Custom MIDI note mappings for your drum kit. Click "Learn" next to a lane,
+      then hit the corresponding pad on your kit to map it.
+    </p>
+
+    <div id="midi-learn-status" class="text-sm mb-3 p-2 rounded bg-gray-800 text-gray-500" style="display:none;"></div>
+
+    <table class="text-sm w-full" id="midi-map-table">
+      <thead>
+        <tr class="text-left text-gray-500">
+          <th class="pr-4 pb-2">Lane</th>
+          <th class="pr-4 pb-2">MIDI Notes</th>
+          <th class="pb-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="midi-map-body">
+        <!-- Populated by JS -->
+      </tbody>
+    </table>
+
+    <div class="flex gap-2 mt-4">
+      <button
+        onclick="resetMidiMap()"
+        class="px-3 py-1.5 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 text-sm"
+      >
+        Reset to GM Default
+      </button>
+      <button
+        onclick="clearAllMidiMappings()"
+        class="px-3 py-1.5 bg-red-900 text-red-300 rounded hover:bg-red-800 text-sm"
+      >
+        Clear All Custom
+      </button>
+    </div>
+
+    <div class="mt-3">
+      <h4 class="text-xs font-medium text-gray-500 mb-1">MIDI Device Status</h4>
+      <div id="midi-device-status" class="text-sm text-gray-400">Checking...</div>
+    </div>
+  </div>
 </div>
 
 <script>
+// ── GM Default MIDI Mapping ──
+// Same as MIDI_TO_LANE in screen.js
+var GM_DEFAULT_MAP = {
+  36: "kick", 35: "kick",
+  38: "red", 40: "red", 37: "red",
+  42: "yellow", 46: "yellow", 44: "yellow",
+  48: "blue", 47: "blue", 50: "blue",
+  45: "green", 43: "green", 41: "green", 58: "green",
+  49: "yellow", 57: "yellow",
+  55: "blue", 51: "blue", 59: "blue",
+  53: "green", 52: "green"
+};
+
+var LANE_INFO = {
+  kick:   { label: "Kick",      color: "#FF8800" },
+  red:    { label: "Snare",     color: "#FF0000" },
+  yellow: { label: "Hi-Hat",    color: "#FFFF00" },
+  blue:   { label: "Blue Tom",  color: "#0088FF" },
+  green:  { label: "Floor Tom", color: "#00FF00" }
+};
+
+var STORAGE_KEY = "drum_highway_midi_map";
+var learningLane = null;
+var midiAccessRef = null;
+
+function loadMidiMap() {
+  try {
+    var stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch (e) {}
+  return null;
+}
+
+function saveMidiMap(map) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+}
+
+function getCurrentMap() {
+  return loadMidiMap() || Object.assign({}, GM_DEFAULT_MAP);
+}
+
+function getNotesForLane(lane, map) {
+  var notes = [];
+  for (var noteStr in map) {
+    if (map[noteStr] === lane) {
+      notes.push(parseInt(noteStr));
+    }
+  }
+  return notes.sort(function(a, b) { return a - b; });
+}
+
+function midiNoteLabel(note) {
+  var names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  var octave = Math.floor(note / 12) - 1;
+  var name = names[note % 12];
+  return name + octave + " (" + note + ")";
+}
+
+function renderMidiTable() {
+  var map = getCurrentMap();
+  var isCustom = loadMidiMap() !== null;
+  var tbody = document.getElementById("midi-map-body");
+  tbody.innerHTML = "";
+
+  var lanes = ["kick", "red", "yellow", "blue", "green"];
+
+  lanes.forEach(function(lane) {
+    var info = LANE_INFO[lane];
+    var notes = getNotesForLane(lane, map);
+    var tr = document.createElement("tr");
+    tr.className = "border-t border-gray-800";
+
+    // Lane name with color dot
+    var tdLane = document.createElement("td");
+    tdLane.className = "pr-4 py-2";
+    tdLane.innerHTML = '<span style="color:' + info.color + '">&#9679;</span> ' + info.label;
+    tr.appendChild(tdLane);
+
+    // MIDI notes
+    var tdNotes = document.createElement("td");
+    tdNotes.className = "pr-4 py-2 font-mono text-xs";
+    tdNotes.id = "midi-notes-" + lane;
+    if (notes.length > 0) {
+      tdNotes.textContent = notes.map(function(n) { return n; }).join(", ");
+      tdNotes.title = notes.map(midiNoteLabel).join("\n");
+    } else {
+      tdNotes.innerHTML = '<span class="text-gray-600">none</span>';
+    }
+    tr.appendChild(tdNotes);
+
+    // Learn / Remove buttons
+    var tdActions = document.createElement("td");
+    tdActions.className = "py-2";
+
+    var learnBtn = document.createElement("button");
+    learnBtn.className = "px-2 py-1 text-xs rounded mr-1 " +
+      (learningLane === lane
+        ? "bg-yellow-600 text-white animate-pulse"
+        : "bg-blue-800 text-blue-300 hover:bg-blue-700");
+    learnBtn.textContent = learningLane === lane ? "Listening..." : "Learn";
+    learnBtn.id = "learn-btn-" + lane;
+    learnBtn.onclick = (function(l) {
+      return function() { startLearning(l); };
+    })(lane);
+    tdActions.appendChild(learnBtn);
+
+    // Remove last button
+    if (notes.length > 0) {
+      var removeBtn = document.createElement("button");
+      removeBtn.className = "px-2 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:bg-gray-700";
+      removeBtn.textContent = "Remove Last";
+      removeBtn.onclick = (function(l, ns) {
+        return function() { removeLastNote(l, ns); };
+      })(lane, notes);
+      tdActions.appendChild(removeBtn);
+    }
+
+    tr.appendChild(tdActions);
+    tbody.appendChild(tr);
+  });
+}
+
+function startLearning(lane) {
+  if (learningLane === lane) {
+    // Cancel learning
+    learningLane = null;
+    hideStatus();
+    renderMidiTable();
+    return;
+  }
+
+  learningLane = lane;
+  showStatus("Hit a pad on your drum kit to map it to " + LANE_INFO[lane].label + "...", "yellow");
+  renderMidiTable();
+
+  // Auto-cancel after 10 seconds
+  setTimeout(function() {
+    if (learningLane === lane) {
+      learningLane = null;
+      hideStatus();
+      renderMidiTable();
+    }
+  }, 10000);
+}
+
+function onMidiLearnNote(noteNumber) {
+  if (!learningLane) return;
+
+  var map = getCurrentMap();
+
+  // Remove this note from any existing lane mapping
+  delete map[noteNumber];
+
+  // Add to the learning lane
+  map[noteNumber] = learningLane;
+
+  saveMidiMap(map);
+
+  showStatus(
+    "Mapped MIDI note " + midiNoteLabel(noteNumber) + " to " + LANE_INFO[learningLane].label,
+    "green"
+  );
+
+  learningLane = null;
+  renderMidiTable();
+
+  // Notify screen.js to reload the mapping
+  if (window.slopsmith) {
+    window.slopsmith.emit("drum_highway:midi_map_changed", { map: map });
+  }
+
+  // Auto-hide status after 3 seconds
+  setTimeout(hideStatus, 3000);
+}
+
+function removeLastNote(lane, notes) {
+  if (!notes.length) return;
+  var map = getCurrentMap();
+  var lastNote = notes[notes.length - 1];
+  delete map[lastNote];
+  saveMidiMap(map);
+  renderMidiTable();
+
+  if (window.slopsmith) {
+    window.slopsmith.emit("drum_highway:midi_map_changed", { map: map });
+  }
+}
+
+function resetMidiMap() {
+  localStorage.removeItem(STORAGE_KEY);
+  learningLane = null;
+  showStatus("Reset to General MIDI defaults", "blue");
+  renderMidiTable();
+
+  if (window.slopsmith) {
+    window.slopsmith.emit("drum_highway:midi_map_changed", { map: GM_DEFAULT_MAP });
+  }
+
+  setTimeout(hideStatus, 3000);
+}
+
+function clearAllMidiMappings() {
+  if (!confirm("Clear all custom MIDI mappings? This will leave all lanes unmapped.")) return;
+  saveMidiMap({});
+  learningLane = null;
+  showStatus("All custom mappings cleared", "red");
+  renderMidiTable();
+
+  if (window.slopsmith) {
+    window.slopsmith.emit("drum_highway:midi_map_changed", { map: {} });
+  }
+
+  setTimeout(hideStatus, 3000);
+}
+
+function showStatus(msg, color) {
+  var el = document.getElementById("midi-learn-status");
+  el.style.display = "block";
+  el.textContent = msg;
+  var colors = {
+    yellow: "border-left: 3px solid #EAB308; color: #EAB308;",
+    green:  "border-left: 3px solid #22C55E; color: #22C55E;",
+    red:    "border-left: 3px solid #EF4444; color: #EF4444;",
+    blue:   "border-left: 3px solid #3B82F6; color: #3B82F6;"
+  };
+  el.style.cssText = "display:block; padding:8px 12px; border-radius:4px; background:#1a1a2e; font-size:13px; " +
+    (colors[color] || "color: #9CA3AF;");
+}
+
+function hideStatus() {
+  document.getElementById("midi-learn-status").style.display = "none";
+}
+
+// ── MIDI Access for Learn Mode ──
+async function initMidiForSettings() {
+  var statusEl = document.getElementById("midi-device-status");
+
+  if (!navigator.requestMIDIAccess) {
+    statusEl.innerHTML = '<span class="text-red-400">Web MIDI not supported in this browser</span>';
+    return;
+  }
+
+  try {
+    midiAccessRef = await navigator.requestMIDIAccess({ sysex: false });
+    var inputs = [];
+
+    midiAccessRef.inputs.forEach(function(input) {
+      inputs.push(input.name);
+      input.onmidimessage = function(msg) {
+        var status = msg.data[0];
+        var note = msg.data[1];
+        var velocity = msg.data[2];
+
+        // Note On with velocity > 0
+        if ((status & 0xF0) === 0x90 && velocity > 0) {
+          if (learningLane) {
+            onMidiLearnNote(note);
+          }
+        }
+      };
+    });
+
+    if (inputs.length > 0) {
+      statusEl.innerHTML = '<span class="text-green-400">Connected: ' + inputs.join(", ") + '</span>';
+    } else {
+      statusEl.innerHTML = '<span class="text-yellow-400">No MIDI devices detected. Connect a drum kit and refresh.</span>';
+    }
+
+    midiAccessRef.onstatechange = function(e) {
+      // Re-init on device change
+      initMidiForSettings();
+    };
+  } catch (err) {
+    statusEl.innerHTML = '<span class="text-red-400">MIDI access denied: ' + err.message + '</span>';
+  }
+}
+
+// ── Song List ──
 async function loadDrumSongs() {
   try {
-    const resp = await fetch('/api/plugins/drum_highway/songs');
-    const data = await resp.json();
-    const el = document.getElementById('drum-highway-songs');
+    var resp = await fetch('/api/plugins/drum_highway/songs');
+    var data = await resp.json();
+    var el = document.getElementById('drum-highway-songs');
     if (data.count === 0) {
       el.textContent = 'No drum charts found. Use combine_charts.py to add Clone Hero charts.';
     } else {
-      el.innerHTML = data.songs.map(s =>
-        `<p><strong>${s.name}</strong> — ${s.artist} (${s.difficulties.join(', ')})</p>`
-      ).join('');
+      el.innerHTML = data.songs.map(function(s) {
+        return '<p><strong>' + s.name + '</strong> &mdash; ' + s.artist + ' (' + s.difficulties.join(', ') + ')</p>';
+      }).join('');
     }
   } catch (err) {
     document.getElementById('drum-highway-songs').textContent = 'Failed to load';
   }
 }
+
+// ── Init ──
 loadDrumSongs();
+renderMidiTable();
+initMidiForSettings();
 </script>

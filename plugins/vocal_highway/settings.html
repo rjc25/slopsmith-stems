@@ -1,0 +1,82 @@
+<div class="p-4 space-y-4">
+  <h2 class="text-lg font-bold">Vocal Highway</h2>
+  <p class="text-sm text-gray-400">
+    YARC-style vocal pitch highway. Displays scrolling lyrics with pitch tubes
+    and real-time microphone scoring.
+  </p>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Songs with Vocal Charts</h3>
+    <div id="vocal-highway-songs" class="text-sm text-gray-400">Loading...</div>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Microphone</h3>
+    <p class="text-xs text-gray-500 mb-2">
+      The vocal highway uses your browser microphone for pitch detection.
+      Grant microphone access when prompted. For best results, use headphones
+      to prevent the backing track from interfering with pitch detection.
+    </p>
+    <div id="vocal-mic-status" class="text-sm text-gray-400">Checking...</div>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">How It Works</h3>
+    <ul class="text-sm text-gray-400 space-y-1 list-disc list-inside">
+      <li>Blue tubes show the target pitch and timing</li>
+      <li>Sing into your microphone -- the orange dot tracks your pitch</li>
+      <li>Tubes turn green when your pitch matches (+/-1 semitone)</li>
+      <li>Tubes turn red when off-pitch</li>
+      <li>Lyrics scroll across the top of the screen</li>
+      <li>The vocal stem is auto-muted so you sing the part yourself</li>
+    </ul>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Tips</h3>
+    <ul class="text-sm text-gray-400 space-y-1 list-disc list-inside">
+      <li>Use headphones to prevent audio feedback into the mic</li>
+      <li>Disable browser noise suppression in audio settings for cleaner pitch detection</li>
+      <li>Octave equivalence: singing an octave higher or lower still counts as a hit</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+async function loadVocalSongs() {
+  try {
+    var resp = await fetch('/api/plugins/vocal_highway/songs');
+    var data = await resp.json();
+    var el = document.getElementById('vocal-highway-songs');
+    if (data.count === 0) {
+      el.textContent = 'No vocal charts found. Clone Hero charts with vocal sections will appear here.';
+    } else {
+      el.innerHTML = data.songs.map(function(s) {
+        return '<p><strong>' + s.name + '</strong> &mdash; ' + s.artist +
+          ' (' + s.event_count + ' events)</p>';
+      }).join('');
+    }
+  } catch (err) {
+    document.getElementById('vocal-highway-songs').textContent = 'Failed to load';
+  }
+}
+
+async function checkMicStatus() {
+  var el = document.getElementById('vocal-mic-status');
+  try {
+    var devices = await navigator.mediaDevices.enumerateDevices();
+    var mics = devices.filter(function(d) { return d.kind === 'audioinput'; });
+    if (mics.length > 0) {
+      var names = mics.map(function(m) { return m.label || 'Microphone'; }).join(', ');
+      el.innerHTML = '<span class="text-green-400">Available: ' + names + '</span>';
+    } else {
+      el.innerHTML = '<span class="text-yellow-400">No microphones detected</span>';
+    }
+  } catch (err) {
+    el.innerHTML = '<span class="text-red-400">Cannot enumerate devices: ' + err.message + '</span>';
+  }
+}
+
+loadVocalSongs();
+checkMicStatus();
+</script>

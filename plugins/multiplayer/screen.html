@@ -1,0 +1,73 @@
+<div class="p-4 space-y-4">
+  <h2 class="text-lg font-bold">Multiplayer</h2>
+  <p class="text-sm text-gray-400">
+    Full-band multiplayer sessions. Create a room, invite friends, pick instruments,
+    and play together with synchronized audio.
+  </p>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Quick Start</h3>
+    <ol class="text-sm text-gray-400 space-y-1 list-decimal list-inside">
+      <li>Open the Multiplayer panel from the nav bar</li>
+      <li>Enter your name and create a room (or join an existing one)</li>
+      <li>Share the room code with your bandmates</li>
+      <li>Each player picks an instrument (guitar, bass, drums, or vocals)</li>
+      <li>Everyone clicks Ready</li>
+      <li>Host clicks Start -- the song plays with each player's stem muted</li>
+    </ol>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">How It Works</h3>
+    <ul class="text-sm text-gray-400 space-y-1 list-disc list-inside">
+      <li>Each player's instrument stem is automatically muted for them</li>
+      <li>Guitar player hears everything except the guitar track</li>
+      <li>Drums player hears everything except the drums track</li>
+      <li>Playback is synchronized via WebSocket time sync</li>
+      <li>Split-screen layout shows each player's highway</li>
+    </ul>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Active Rooms</h3>
+    <div id="mp-settings-rooms" class="text-sm text-gray-400">Loading...</div>
+    <button
+      onclick="refreshSettingsRooms()"
+      class="mt-2 px-3 py-1.5 bg-blue-800 text-blue-300 rounded hover:bg-blue-700 text-sm"
+    >
+      Refresh
+    </button>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Limitations</h3>
+    <ul class="text-sm text-gray-400 space-y-1 list-disc list-inside">
+      <li>Maximum 4 players per room (one per instrument)</li>
+      <li>All players must have the same song/stems loaded</li>
+      <li>Time sync accuracy depends on network latency</li>
+      <li>For best results, players on the same LAN get tighter sync</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+async function refreshSettingsRooms() {
+  var el = document.getElementById('mp-settings-rooms');
+  try {
+    var resp = await fetch('/api/plugins/multiplayer/rooms');
+    var data = await resp.json();
+    if (data.count === 0) {
+      el.textContent = 'No active rooms';
+    } else {
+      el.innerHTML = data.rooms.map(function(r) {
+        return '<p><strong>' + r.room_id + '</strong> &mdash; ' +
+          (r.song_key || 'No song') + ' (' + r.player_count + '/4 players' +
+          (r.playing ? ', playing' : '') + ')</p>';
+      }).join('');
+    }
+  } catch (err) {
+    el.textContent = 'Failed to load rooms';
+  }
+}
+refreshSettingsRooms();
+</script>

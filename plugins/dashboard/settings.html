@@ -1,0 +1,205 @@
+<div class="p-4 space-y-4" style="color: #e0e0e0;">
+  <h2 class="text-lg font-bold">Stem Manager Dashboard Settings</h2>
+  <p class="text-sm text-gray-400">
+    Configure directory paths, API keys, and processing defaults for the full
+    stem separation + chart combining pipeline.
+  </p>
+
+  <!-- Directory Paths -->
+  <div class="space-y-3">
+    <h3 class="text-sm font-medium" style="color: #a5a0ff;">Directory Paths</h3>
+
+    <div>
+      <label class="block text-sm font-medium mb-1">CDLC / Source Audio Directory</label>
+      <p class="text-xs text-gray-500 mb-1">Where your .psarc files or raw audio files live.</p>
+      <input type="text" id="ds-cdlc-dir" placeholder="/path/to/cdlc/"
+        class="w-full p-2 border rounded bg-gray-800 text-white" style="border-color: #3a3a5e;" />
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1">Clone Hero / YARC Directory</label>
+      <p class="text-xs text-gray-500 mb-1">Root folder of Clone Hero songs (each in its own subfolder with notes.chart/notes.mid).</p>
+      <input type="text" id="ds-ch-dir" placeholder="/path/to/clonehero/songs/"
+        class="w-full p-2 border rounded bg-gray-800 text-white" style="border-color: #3a3a5e;" />
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1">Stems / Output Directory</label>
+      <p class="text-xs text-gray-500 mb-1">Where separated stems are saved. Each song gets its own subfolder.</p>
+      <input type="text" id="ds-stems-dir" placeholder="/path/to/stems/"
+        class="w-full p-2 border rounded bg-gray-800 text-white" style="border-color: #3a3a5e;" />
+    </div>
+  </div>
+
+  <!-- API Key -->
+  <div class="space-y-2">
+    <h3 class="text-sm font-medium" style="color: #a5a0ff;">Replicate API</h3>
+    <div>
+      <label class="block text-sm font-medium mb-1">API Key</label>
+      <p class="text-xs text-gray-500 mb-1">
+        Required for Demucs stem separation.
+        <a href="https://replicate.com/account/api-tokens" target="_blank"
+           style="color: #6c63ff; text-decoration: underline;">Get your key here</a>.
+      </p>
+      <input type="password" id="ds-api-key" placeholder="r8_xxxx..."
+        class="w-full p-2 border rounded bg-gray-800 text-white" style="border-color: #3a3a5e;" />
+      <div class="mt-2 flex gap-2">
+        <button onclick="dsTestConnection()"
+          class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+          Test Connection
+        </button>
+        <span id="ds-api-test" class="text-sm text-gray-400 self-center"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Processing Defaults -->
+  <div class="space-y-2">
+    <h3 class="text-sm font-medium" style="color: #a5a0ff;">Processing Defaults</h3>
+    <div>
+      <label class="block text-sm font-medium mb-1">Cost per Song</label>
+      <p class="text-xs text-gray-500">Demucs on Replicate costs approximately $0.021 per song (~94s avg processing time).</p>
+    </div>
+  </div>
+
+  <!-- Library Stats -->
+  <div class="space-y-2">
+    <h3 class="text-sm font-medium" style="color: #a5a0ff;">Library Stats</h3>
+    <div id="ds-stats" class="text-sm text-gray-400">Loading...</div>
+  </div>
+
+  <!-- Actions -->
+  <div class="space-y-2 pt-2">
+    <div class="flex gap-2">
+      <button onclick="dsSaveSettings()"
+        class="px-4 py-2 text-white rounded text-sm font-semibold"
+        style="background: #6c63ff;">
+        Save Settings
+      </button>
+      <button onclick="dsRescanLibrary()"
+        class="px-4 py-2 text-gray-300 rounded text-sm border"
+        style="border-color: #3a3a5e;">
+        Rescan Library
+      </button>
+    </div>
+    <span id="ds-save-status" class="text-sm text-gray-400"></span>
+  </div>
+</div>
+
+<script>
+// Load current settings
+async function dsLoadSettings() {
+  try {
+    var resp = await fetch('/api/plugins/dashboard/settings');
+    var data = await resp.json();
+    document.getElementById('ds-cdlc-dir').value = data.cdlc_dir || '';
+    document.getElementById('ds-ch-dir').value = data.clonehero_dir || '';
+    document.getElementById('ds-stems-dir').value = data.stems_dir || '';
+    // Don't fill password field, just show status
+    if (data.has_api_key) {
+      document.getElementById('ds-api-key').placeholder = 'Key saved: ' + data.replicate_api_key_masked;
+    }
+  } catch (err) {
+    console.error('Failed to load dashboard settings:', err);
+  }
+}
+
+async function dsSaveSettings() {
+  var status = document.getElementById('ds-save-status');
+  status.textContent = 'Saving...';
+
+  var settings = {
+    cdlc_dir: document.getElementById('ds-cdlc-dir').value,
+    clonehero_dir: document.getElementById('ds-ch-dir').value,
+    stems_dir: document.getElementById('ds-stems-dir').value,
+    output_dir: document.getElementById('ds-stems-dir').value,
+  };
+  var apiKey = document.getElementById('ds-api-key').value;
+  if (apiKey) settings.replicate_api_key = apiKey;
+
+  try {
+    await fetch('/api/plugins/dashboard/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(settings),
+    });
+    status.textContent = 'Settings saved';
+    status.style.color = '#22c55e';
+    dsLoadSettings();
+  } catch (err) {
+    status.textContent = 'Failed: ' + err.message;
+    status.style.color = '#ef4444';
+  }
+}
+
+async function dsTestConnection() {
+  var result = document.getElementById('ds-api-test');
+  result.textContent = 'Testing...';
+  result.style.color = '#aaaabb';
+
+  // Save key first if entered
+  var apiKey = document.getElementById('ds-api-key').value;
+  if (apiKey) {
+    await fetch('/api/plugins/dashboard/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ replicate_api_key: apiKey }),
+    });
+  }
+
+  try {
+    var resp = await fetch('/api/plugins/dashboard/test-api', { method: 'POST' });
+    var data = await resp.json();
+    if (data.ok) {
+      result.textContent = 'Connected';
+      result.style.color = '#22c55e';
+    } else {
+      result.textContent = 'Failed: ' + data.error;
+      result.style.color = '#ef4444';
+    }
+  } catch (err) {
+    result.textContent = 'Error: ' + err.message;
+    result.style.color = '#ef4444';
+  }
+}
+
+async function dsRescanLibrary() {
+  var status = document.getElementById('ds-save-status');
+  status.textContent = 'Scanning...';
+  status.style.color = '#6c63ff';
+
+  try {
+    var resp = await fetch('/api/plugins/dashboard/scan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({}),
+    });
+    var data = await resp.json();
+    status.textContent = 'Scanned: ' + data.total_songs + ' songs found';
+    status.style.color = '#22c55e';
+    dsLoadStats();
+  } catch (err) {
+    status.textContent = 'Scan failed: ' + err.message;
+    status.style.color = '#ef4444';
+  }
+}
+
+async function dsLoadStats() {
+  try {
+    var resp = await fetch('/api/plugins/dashboard/stats');
+    var data = await resp.json();
+    document.getElementById('ds-stats').innerHTML =
+      '<p>Total songs: <strong>' + data.total + '</strong></p>' +
+      '<p>With stems: ' + data.with_stems + ' | With drums: ' + data.with_drums +
+      ' | With vocals: ' + data.with_vocals + '</p>' +
+      '<p>CDLC sources: ' + data.with_cdlc + ' | Combined: ' + data.combined + '</p>' +
+      '<p>Missing stems: ' + data.missing_stems +
+      ' (est. cost: $' + data.est_cost.toFixed(2) + ')</p>';
+  } catch (err) {
+    document.getElementById('ds-stats').textContent = 'Failed to load stats';
+  }
+}
+
+dsLoadSettings();
+dsLoadStats();
+</script>

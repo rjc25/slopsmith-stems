@@ -1,0 +1,15 @@
+{
+  "id": "dashboard",
+  "name": "Stem Manager Dashboard",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Web GUI for managing the full stem separation, chart combining, and multiplayer pipeline. Scan libraries, process stems via Demucs, combine CDLC + Clone Hero charts, and launch multiplayer sessions.",
+  "nav": { "label": "🏛️ Manager", "screen": "plugin-dashboard" },
+  "screen": "screen.html",
+  "script": "screen.js",
+  "routes": "routes.py",
+  "settings": {
+    "html": "settings.html",
+    "server_files": ["library.json"]
+  }
+}

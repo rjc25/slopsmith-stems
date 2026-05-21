@@ -1,0 +1,462 @@
+<div id="dashboard-root" class="min-h-screen" style="background: #1a1a2e; color: #e0e0e0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;">
+
+  <!-- Header Bar -->
+  <div style="background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%); border-bottom: 1px solid #2a2a4e; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span style="font-size: 24px;">🎛️</span>
+      <h1 style="font-size: 20px; font-weight: 700; color: #fff; margin: 0;">Stem Manager</h1>
+    </div>
+    <div id="dash-stats-bar" style="display: flex; gap: 16px; font-size: 13px; color: #8888aa;">
+      <span id="stat-total">-- songs</span>
+      <span style="color: #3a3a5e;">|</span>
+      <span id="stat-stems">-- with stems</span>
+      <span style="color: #3a3a5e;">|</span>
+      <span id="stat-drums">-- with drums</span>
+      <span style="color: #3a3a5e;">|</span>
+      <span id="stat-combined">-- combined</span>
+    </div>
+    <button id="btn-settings-gear" onclick="DashboardUI.toggleSettingsModal()"
+      style="background: none; border: 1px solid #3a3a5e; border-radius: 8px; padding: 6px 10px; color: #8888aa; cursor: pointer; font-size: 16px;"
+      title="Settings">
+      ⚙️
+    </button>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div style="display: flex; background: #16213e; border-bottom: 1px solid #2a2a4e; padding: 0 24px;">
+    <button class="dash-tab active" data-tab="library" onclick="DashboardUI.switchTab('library')"
+      style="padding: 12px 20px; background: none; border: none; border-bottom: 2px solid #6c63ff; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;">
+      Library
+    </button>
+    <button class="dash-tab" data-tab="process" onclick="DashboardUI.switchTab('process')"
+      style="padding: 12px 20px; background: none; border: none; border-bottom: 2px solid transparent; color: #8888aa; font-size: 14px; font-weight: 600; cursor: pointer;">
+      Process
+    </button>
+    <button class="dash-tab" data-tab="combine" onclick="DashboardUI.switchTab('combine')"
+      style="padding: 12px 20px; background: none; border: none; border-bottom: 2px solid transparent; color: #8888aa; font-size: 14px; font-weight: 600; cursor: pointer;">
+      Combine
+    </button>
+    <button class="dash-tab" data-tab="multiplayer" onclick="DashboardUI.switchTab('multiplayer')"
+      style="padding: 12px 20px; background: none; border: none; border-bottom: 2px solid transparent; color: #8888aa; font-size: 14px; font-weight: 600; cursor: pointer;">
+      Multiplayer
+    </button>
+  </div>
+
+  <!-- Tab Content -->
+  <div style="padding: 24px;">
+
+    <!-- ═══════════════════ LIBRARY TAB ═══════════════════ -->
+    <div id="tab-library" class="dash-tab-content" style="display: block;">
+      <!-- Search + Filters -->
+      <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+        <div style="flex: 1; min-width: 250px; position: relative;">
+          <input id="library-search" type="text" placeholder="Search by title or artist..."
+            oninput="DashboardUI.filterLibrary()"
+            style="width: 100%; padding: 10px 14px 10px 36px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+          />
+          <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #5a5a7e; font-size: 14px;">🔍</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button class="dash-filter active" data-filter="all" onclick="DashboardUI.setFilter('all')"
+            style="padding: 6px 14px; border-radius: 6px; border: 1px solid #6c63ff; background: rgba(108,99,255,0.2); color: #a5a0ff; font-size: 12px; cursor: pointer; font-weight: 600;">
+            All
+          </button>
+          <button class="dash-filter" data-filter="missing_stems" onclick="DashboardUI.setFilter('missing_stems')"
+            style="padding: 6px 14px; border-radius: 6px; border: 1px solid #3a3a5e; background: transparent; color: #8888aa; font-size: 12px; cursor: pointer;">
+            Missing Stems
+          </button>
+          <button class="dash-filter" data-filter="missing_drums" onclick="DashboardUI.setFilter('missing_drums')"
+            style="padding: 6px 14px; border-radius: 6px; border: 1px solid #3a3a5e; background: transparent; color: #8888aa; font-size: 12px; cursor: pointer;">
+            Missing Drums
+          </button>
+          <button class="dash-filter" data-filter="ready" onclick="DashboardUI.setFilter('ready')"
+            style="padding: 6px 14px; border-radius: 6px; border: 1px solid #3a3a5e; background: transparent; color: #8888aa; font-size: 12px; cursor: pointer;">
+            Ready to Play
+          </button>
+        </div>
+      </div>
+
+      <!-- Bulk Actions -->
+      <div id="bulk-actions" style="display: none; margin-bottom: 12px; padding: 10px 16px; background: rgba(108,99,255,0.1); border: 1px solid #6c63ff; border-radius: 8px; display: none; align-items: center; gap: 12px;">
+        <span id="bulk-count" style="font-size: 13px; color: #a5a0ff;">0 selected</span>
+        <button onclick="DashboardUI.processSelected()"
+          style="padding: 6px 14px; border-radius: 6px; border: none; background: #6c63ff; color: #fff; font-size: 12px; cursor: pointer; font-weight: 600;">
+          Process Selected
+        </button>
+        <button onclick="DashboardUI.clearSelection()"
+          style="padding: 6px 14px; border-radius: 6px; border: 1px solid #3a3a5e; background: transparent; color: #8888aa; font-size: 12px; cursor: pointer;">
+          Clear
+        </button>
+      </div>
+
+      <!-- Song List -->
+      <div id="library-list" style="border: 1px solid #2a2a4e; border-radius: 8px; overflow: hidden;">
+        <!-- Table Header -->
+        <div style="display: grid; grid-template-columns: 40px 2fr 1.5fr 180px 160px; padding: 10px 16px; background: #16213e; border-bottom: 1px solid #2a2a4e; font-size: 12px; font-weight: 600; color: #6a6a8e; text-transform: uppercase; letter-spacing: 0.5px;">
+          <div><input type="checkbox" id="select-all" onchange="DashboardUI.toggleSelectAll()" style="cursor: pointer;"/></div>
+          <div>Title</div>
+          <div>Artist</div>
+          <div>Status</div>
+          <div>Actions</div>
+        </div>
+        <div id="library-rows" style="max-height: 500px; overflow-y: auto;">
+          <div style="padding: 40px; text-align: center; color: #5a5a7e;">
+            No songs loaded. Click <strong>Scan Library</strong> in the Process tab to get started.
+          </div>
+        </div>
+      </div>
+
+      <div id="library-count" style="margin-top: 8px; font-size: 12px; color: #5a5a7e; text-align: right;"></div>
+    </div>
+
+    <!-- ═══════════════════ PROCESS TAB ═══════════════════ -->
+    <div id="tab-process" class="dash-tab-content" style="display: none;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <!-- Left: Config -->
+        <div>
+          <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #fff;">Configuration</h3>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #aaaabb;">CDLC / Audio Folder</label>
+            <input id="proc-cdlc-dir" type="text" placeholder="/path/to/cdlc/library"
+              style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+            />
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #aaaabb;">Output / Stems Folder</label>
+            <input id="proc-output-dir" type="text" placeholder="/path/to/output/stems"
+              style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+            />
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #aaaabb;">Replicate API Key</label>
+            <input id="proc-api-key" type="password" placeholder="r8_xxxx..."
+              style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+            />
+            <span id="api-key-status" style="font-size: 12px; color: #5a5a7e; margin-top: 4px; display: block;"></span>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 24px;">
+            <button onclick="DashboardUI.scanLibrary()"
+              style="padding: 10px 20px; border-radius: 8px; border: none; background: #6c63ff; color: #fff; font-size: 14px; cursor: pointer; font-weight: 600;">
+              Scan Library
+            </button>
+            <button onclick="DashboardUI.saveProcessSettings()"
+              style="padding: 10px 20px; border-radius: 8px; border: 1px solid #3a3a5e; background: transparent; color: #aaaabb; font-size: 14px; cursor: pointer;">
+              Save Settings
+            </button>
+          </div>
+          <div id="scan-status" style="font-size: 13px; color: #5a5a7e; margin-bottom: 16px;"></div>
+
+          <!-- Cost Estimate -->
+          <div id="cost-estimate" style="padding: 16px; background: rgba(108,99,255,0.08); border: 1px solid #2a2a4e; border-radius: 8px; display: none;">
+            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #a5a0ff;">Cost Estimate</h4>
+            <div id="cost-details" style="font-size: 13px; color: #8888aa; line-height: 1.6;"></div>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button id="btn-process-all" onclick="DashboardUI.processAll()"
+              style="padding: 10px 20px; border-radius: 8px; border: none; background: #22c55e; color: #fff; font-size: 14px; cursor: pointer; font-weight: 600; display: none;">
+              Process All Missing
+            </button>
+            <button id="btn-process-cancel" onclick="DashboardUI.cancelProcessing()"
+              style="padding: 10px 20px; border-radius: 8px; border: none; background: #ef4444; color: #fff; font-size: 14px; cursor: pointer; font-weight: 600; display: none;">
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Progress -->
+        <div>
+          <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #fff;">Progress</h3>
+
+          <div id="progress-section" style="display: none;">
+            <!-- Overall Progress Bar -->
+            <div style="margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                <span id="progress-label" style="color: #aaaabb;">Processing...</span>
+                <span id="progress-pct" style="color: #6c63ff; font-weight: 600;">0%</span>
+              </div>
+              <div style="width: 100%; height: 8px; background: #2a2a4e; border-radius: 4px; overflow: hidden;">
+                <div id="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6c63ff, #22c55e); border-radius: 4px; transition: width 0.5s ease;"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: #5a5a7e;">
+                <span id="progress-count">0 / 0</span>
+                <span id="progress-eta">ETA: calculating...</span>
+              </div>
+            </div>
+
+            <!-- Current Song -->
+            <div id="current-song-box" style="padding: 12px 16px; background: rgba(108,99,255,0.1); border: 1px solid #6c63ff; border-radius: 8px; margin-bottom: 16px; display: none;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div id="processing-spinner" style="width: 16px; height: 16px; border: 2px solid #6c63ff; border-top-color: transparent; border-radius: 50%; animation: dash-spin 0.8s linear infinite;"></div>
+                <span id="current-song-name" style="font-size: 14px; color: #fff; font-weight: 500;">...</span>
+              </div>
+            </div>
+
+            <!-- Completed List -->
+            <div style="margin-bottom: 16px;">
+              <h4 style="font-size: 13px; font-weight: 600; color: #22c55e; margin-bottom: 8px;">Completed</h4>
+              <div id="completed-list" style="max-height: 150px; overflow-y: auto; font-size: 13px; color: #8888aa;">
+                <span style="color: #5a5a7e;">None yet</span>
+              </div>
+            </div>
+
+            <!-- Failed List -->
+            <div>
+              <h4 style="font-size: 13px; font-weight: 600; color: #ef4444; margin-bottom: 8px;">Failed</h4>
+              <div id="failed-list" style="max-height: 150px; overflow-y: auto; font-size: 13px; color: #8888aa;">
+                <span style="color: #5a5a7e;">None</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="no-progress" style="padding: 40px; text-align: center; color: #5a5a7e; font-size: 14px;">
+            No active processing. Configure settings and click Process to begin.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ COMBINE TAB ═══════════════════ -->
+    <div id="tab-combine" class="dash-tab-content" style="display: none;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+
+        <!-- Left Panel: CDLC Songs -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 16px; font-weight: 600; color: #fff;">CDLC Songs</h3>
+            <span id="cdlc-count" style="font-size: 12px; color: #5a5a7e;">0 songs</span>
+          </div>
+          <div id="cdlc-list" style="border: 1px solid #2a2a4e; border-radius: 8px; max-height: 350px; overflow-y: auto; background: #16213e;">
+            <div style="padding: 24px; text-align: center; color: #5a5a7e; font-size: 13px;">Scan library first</div>
+          </div>
+        </div>
+
+        <!-- Right Panel: Clone Hero Songs -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 16px; font-weight: 600; color: #fff;">Clone Hero Songs</h3>
+            <span id="ch-count" style="font-size: 12px; color: #5a5a7e;">0 songs</span>
+          </div>
+          <div id="ch-list" style="border: 1px solid #2a2a4e; border-radius: 8px; max-height: 350px; overflow-y: auto; background: #16213e;">
+            <div style="padding: 24px; text-align: center; color: #5a5a7e; font-size: 13px;">Scan library first</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto-Match -->
+      <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center;">
+        <button onclick="DashboardUI.autoMatch()"
+          style="padding: 10px 20px; border-radius: 8px; border: none; background: #6c63ff; color: #fff; font-size: 14px; cursor: pointer; font-weight: 600;">
+          Auto-Match by Title
+        </button>
+        <span id="match-status" style="font-size: 13px; color: #5a5a7e;"></span>
+      </div>
+
+      <!-- Paired Songs -->
+      <div style="margin-top: 24px;">
+        <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #fff;">Paired Songs</h3>
+        <div id="paired-list" style="border: 1px solid #2a2a4e; border-radius: 8px; overflow: hidden;">
+          <div style="padding: 24px; text-align: center; color: #5a5a7e; font-size: 13px;">No pairings yet. Use Auto-Match or click songs to pair them.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ MULTIPLAYER TAB ═══════════════════ -->
+    <div id="tab-multiplayer" class="dash-tab-content" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; font-weight: 600; color: #fff;">Active Rooms</h3>
+        <div style="display: flex; gap: 8px;">
+          <button onclick="DashboardUI.refreshRooms()"
+            style="padding: 8px 16px; border-radius: 8px; border: 1px solid #3a3a5e; background: transparent; color: #aaaabb; font-size: 13px; cursor: pointer;">
+            Refresh
+          </button>
+          <button onclick="DashboardUI.showCreateRoom()"
+            style="padding: 8px 16px; border-radius: 8px; border: none; background: #6c63ff; color: #fff; font-size: 13px; cursor: pointer; font-weight: 600;">
+            Create Room
+          </button>
+        </div>
+      </div>
+
+      <div id="rooms-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+        <div style="padding: 40px; text-align: center; color: #5a5a7e; font-size: 14px; grid-column: 1 / -1;">
+          No active rooms. Create one to start a session.
+        </div>
+      </div>
+
+      <!-- Create Room Modal -->
+      <div id="create-room-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: none; align-items: center; justify-content: center;">
+        <div style="background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 12px; padding: 24px; width: 400px; max-width: 90vw;">
+          <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #fff;">Create Room</h3>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #aaaabb;">Your Name</label>
+            <input id="room-host-name" type="text" placeholder="Player name"
+              style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+            />
+          </div>
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #aaaabb;">Song</label>
+            <select id="room-song-select"
+              style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;">
+              <option value="">Select a song...</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button onclick="DashboardUI.hideCreateRoom()"
+              style="padding: 8px 16px; border-radius: 8px; border: 1px solid #3a3a5e; background: transparent; color: #aaaabb; font-size: 13px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="DashboardUI.createRoom()"
+              style="padding: 8px 16px; border-radius: 8px; border: none; background: #6c63ff; color: #fff; font-size: 13px; cursor: pointer; font-weight: 600;">
+              Create
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 12px; padding: 24px; width: 500px; max-width: 90vw;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="font-size: 18px; font-weight: 600; color: #fff;">Settings</h3>
+        <button onclick="DashboardUI.toggleSettingsModal()"
+          style="background: none; border: none; color: #8888aa; cursor: pointer; font-size: 18px;">
+          ✕
+        </button>
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #aaaabb;">CDLC Directory</label>
+        <input id="set-cdlc-dir" type="text" placeholder="/path/to/cdlc/"
+          style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+        />
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #aaaabb;">Clone Hero Directory</label>
+        <input id="set-ch-dir" type="text" placeholder="/path/to/clonehero/songs/"
+          style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+        />
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #aaaabb;">Stems / Output Directory</label>
+        <input id="set-stems-dir" type="text" placeholder="/path/to/stems/output/"
+          style="width: 100%; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+        />
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #aaaabb;">Replicate API Key</label>
+        <div style="display: flex; gap: 8px;">
+          <input id="set-api-key" type="password" placeholder="r8_xxxx..."
+            style="flex: 1; padding: 10px 14px; background: #16213e; border: 1px solid #2a2a4e; border-radius: 8px; color: #fff; font-size: 14px; outline: none;"
+          />
+          <button onclick="DashboardUI.testApiKey()"
+            style="padding: 10px 14px; border-radius: 8px; border: 1px solid #3a3a5e; background: transparent; color: #aaaabb; font-size: 13px; cursor: pointer; white-space: nowrap;">
+            Test
+          </button>
+        </div>
+        <span id="api-test-result" style="font-size: 12px; color: #5a5a7e; margin-top: 4px; display: block;"></span>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: space-between; margin-top: 20px;">
+        <button onclick="DashboardUI.rescanLibrary()"
+          style="padding: 10px 16px; border-radius: 8px; border: 1px solid #3a3a5e; background: transparent; color: #aaaabb; font-size: 13px; cursor: pointer;">
+          Rescan Library
+        </button>
+        <button onclick="DashboardUI.saveAllSettings()"
+          style="padding: 10px 20px; border-radius: 8px; border: none; background: #6c63ff; color: #fff; font-size: 14px; cursor: pointer; font-weight: 600;">
+          Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes dash-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  #dashboard-root *::-webkit-scrollbar {
+    width: 6px;
+  }
+  #dashboard-root *::-webkit-scrollbar-track {
+    background: #16213e;
+  }
+  #dashboard-root *::-webkit-scrollbar-thumb {
+    background: #3a3a5e;
+    border-radius: 3px;
+  }
+  #dashboard-root *::-webkit-scrollbar-thumb:hover {
+    background: #5a5a7e;
+  }
+
+  #dashboard-root input:focus {
+    border-color: #6c63ff !important;
+  }
+
+  .dash-song-row:hover {
+    background: rgba(108, 99, 255, 0.06) !important;
+  }
+  .dash-song-row.selected {
+    background: rgba(108, 99, 255, 0.12) !important;
+  }
+
+  .dash-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .dash-badge.present {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+  .dash-badge.missing {
+    background: rgba(100, 100, 130, 0.15);
+    color: #5a5a7e;
+  }
+
+  .dash-action-btn {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: none;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: opacity 0.15s;
+  }
+  .dash-action-btn:hover {
+    opacity: 0.85;
+  }
+
+  .combine-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #2a2a4e;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .combine-item:hover {
+    background: rgba(108, 99, 255, 0.08);
+  }
+  .combine-item.selected-pair {
+    background: rgba(108, 99, 255, 0.15);
+    border-left: 3px solid #6c63ff;
+  }
+
+  .room-card {
+    background: #16213e;
+    border: 1px solid #2a2a4e;
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color 0.15s;
+  }
+  .room-card:hover {
+    border-color: #6c63ff;
+  }
+</style>

@@ -245,6 +245,50 @@ def combine(cdlc_path: Path, ch_path: Path, stems_path: Path, output_path: Path)
                     drums_timed[diff] = notes
                     print(f"  Drums ({diff}): {len(notes)} notes")
 
+            # Auto-sync: align CH chart timing to CDLC/stems audio
+            sync_offset = 0.0
+            ch_audio = None
+            ref_audio = None
+
+            # Find CH audio
+            for ext in [".ogg", ".mp3", ".wav", ".opus"]:
+                candidate = ch_path / f"song{ext}"
+                if candidate.exists():
+                    ch_audio = candidate
+                    break
+
+            # Find reference audio (prefer stems full mix, then CDLC extracted)
+            if stems_path:
+                for ext in [".mp3", ".ogg", ".wav"]:
+                    candidate = stems_path / f"original{ext}"
+                    if candidate.exists():
+                        ref_audio = candidate
+                        break
+                # Try guitar stem as fallback reference
+                if not ref_audio:
+                    for ext in [".mp3", ".ogg", ".wav"]:
+                        candidate = stems_path / f"guitar{ext}"
+                        if candidate.exists():
+                            ref_audio = candidate
+                            break
+
+            if ch_audio and ref_audio:
+                try:
+                    from audio_sync import find_offset_chunked, apply_offset_to_chart
+                    print(f"\n  Auto-syncing: {ch_audio.name} → {ref_audio.name}")
+                    sync_offset = find_offset_chunked(str(ref_audio), str(ch_audio))
+                    print(f"  Sync offset: {sync_offset:+.4f}s")
+
+                    # Apply offset to all drum timings
+                    drums_timed = apply_offset_to_chart({"drums": drums_timed}, sync_offset)["drums"]
+                    print(f"  Applied offset to all drum charts")
+                except ImportError:
+                    print("  Warning: numpy not available, skipping auto-sync")
+                except Exception as e:
+                    print(f"  Warning: Auto-sync failed ({e}), using raw chart timing")
+            else:
+                print("  Note: No audio pair found for auto-sync, using raw chart timing")
+
             # Save parsed drum data
             drums_dest = output_path / "drums"
             drums_dest.mkdir(exist_ok=True)
@@ -253,6 +297,7 @@ def combine(cdlc_path: Path, ch_path: Path, stems_path: Path, output_path: Path)
                 "metadata": {**chart_data["metadata"], **ini_meta},
                 "sync_track": chart_data["sync_track"],
                 "drums": drums_timed,
+                "sync_offset_applied": sync_offset,
             }, indent=2))
 
             # Copy original chart for reference

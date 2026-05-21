@@ -1,0 +1,83 @@
+<div class="p-4 space-y-4">
+  <h2 class="text-lg font-bold">Stem Toggle Settings</h2>
+
+  <div class="space-y-2">
+    <label class="block text-sm font-medium">Stems Directory</label>
+    <p class="text-xs text-gray-500">
+      Path to the directory containing stem-separated songs.
+      Each song should be in its own folder with drums.mp3, bass.mp3, vocals.mp3, guitar.mp3, other.mp3
+    </p>
+    <input
+      type="text"
+      id="stem-toggle-dir"
+      class="w-full p-2 border rounded bg-gray-800 text-white"
+      placeholder="/path/to/stems/"
+    />
+    <button
+      onclick="stemToggleScan()"
+      class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      Scan & Index
+    </button>
+    <span id="stem-toggle-status" class="ml-2 text-sm text-gray-400"></span>
+  </div>
+
+  <div class="space-y-2">
+    <h3 class="text-sm font-medium">Library Stats</h3>
+    <div id="stem-toggle-stats" class="text-sm text-gray-400">Loading...</div>
+  </div>
+
+  <div class="space-y-2">
+    <h3 class="text-sm font-medium">Keyboard Shortcuts</h3>
+    <table class="text-sm">
+      <tr><td class="pr-4 font-mono">G</td><td>Toggle guitar</td></tr>
+      <tr><td class="pr-4 font-mono">V</td><td>Toggle vocals</td></tr>
+      <tr><td class="pr-4 font-mono">B</td><td>Toggle bass</td></tr>
+      <tr><td class="pr-4 font-mono">D</td><td>Toggle drums</td></tr>
+      <tr><td class="pr-4 font-mono">O</td><td>Toggle other</td></tr>
+      <tr><td class="pr-4 font-mono">A</td><td>All stems on</td></tr>
+      <tr><td class="pr-4 font-mono">S</td><td>Solo guitar</td></tr>
+      <tr><td class="pr-4 font-mono">Dbl-click</td><td>Solo that stem</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+async function stemToggleScan() {
+  const dir = document.getElementById('stem-toggle-dir').value;
+  const status = document.getElementById('stem-toggle-status');
+  if (!dir) { status.textContent = 'Enter a directory path'; return; }
+
+  status.textContent = 'Scanning...';
+  try {
+    const resp = await fetch('/api/plugins/stem_toggle/scan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({base_dir: dir})
+    });
+    const data = await resp.json();
+    status.textContent = `Indexed ${data.scanned} songs (${data.total_indexed} total)`;
+    loadStemStats();
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function loadStemStats() {
+  try {
+    const resp = await fetch('/api/plugins/stem_toggle/stats');
+    const data = await resp.json();
+    const el = document.getElementById('stem-toggle-stats');
+    el.innerHTML = `
+      <p>Total songs with stems: <strong>${data.total_songs}</strong></p>
+      <p>Drums: ${data.stem_counts.drums} | Bass: ${data.stem_counts.bass} |
+         Vocals: ${data.stem_counts.vocals} | Guitar: ${data.stem_counts.guitar} |
+         Other: ${data.stem_counts.other}</p>
+    `;
+  } catch (err) {
+    document.getElementById('stem-toggle-stats').textContent = 'Failed to load stats';
+  }
+}
+
+loadStemStats();
+</script>

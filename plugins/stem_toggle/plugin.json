@@ -1,0 +1,13 @@
+{
+  "id": "stem_toggle",
+  "name": "Stem Toggle",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Real-time instrument stem toggling during playback. Mute/unmute drums, bass, vocals, guitar, or other stems with keyboard shortcuts.",
+  "routes": "routes.py",
+  "script": "screen.js",
+  "settings": {
+    "html": "settings.html",
+    "server_files": ["stem_index.json"]
+  }
+}

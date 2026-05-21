@@ -200,8 +200,79 @@ def convert_drums_to_timed(chart_data: dict, difficulty: str = "expert") -> list
 
 # ── Combiner ──
 
-def combine(cdlc_path: Path, ch_path: Path, stems_path: Path, output_path: Path):
-    """Combine CDLC, Clone Hero charts, and stems into unified package."""
+def parse_vocals_from_chart(chart_path: Path, sync_track: list = None, resolution: int = 192) -> dict:
+    """Extract vocal data (lyrics + pitch) from a .chart file's [ExpertVocals] section."""
+    text = chart_path.read_text(encoding="utf-8", errors="replace")
+
+    vocals = {"lyrics": [], "pitch_events": []}
+    current_section = None
+
+    for line in text.split("\n"):
+        line = line.strip()
+
+        if line.startswith("[") and line.endswith("]"):
+            current_section = line[1:-1]
+            continue
+
+        if line in ("{", "}"):
+            continue
+
+        # Look for vocal sections
+        if current_section and "Vocals" in current_section:
+            # Lyric events: tick = E "lyric text"
+            lyric_match = re.match(r'(\d+)\s*=\s*E\s+"([^"]*)"', line)
+            if lyric_match:
+                tick = int(lyric_match.group(1))
+                lyric_text = lyric_match.group(2)
+                time_sec = ticks_to_seconds(tick, sync_track or [], resolution)
+                vocals["lyrics"].append({
+                    "tick": tick,
+                    "time": round(time_sec, 4),
+                    "text": lyric_text,
+                })
+
+            # Pitch events: tick = N <midi_note> <duration>
+            note_match = re.match(r'(\d+)\s*=\s*N\s+(\d+)\s+(\d+)', line)
+            if note_match:
+                tick = int(note_match.group(1))
+                midi_note = int(note_match.group(2))
+                duration_ticks = int(note_match.group(3))
+                time_sec = ticks_to_seconds(tick, sync_track or [], resolution)
+                end_sec = ticks_to_seconds(tick + duration_ticks, sync_track or [], resolution)
+
+                # MIDI note to name
+                note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+                octave = (midi_note // 12) - 1
+                note_name = note_names[midi_note % 12]
+
+                vocals["pitch_events"].append({
+                    "tick": tick,
+                    "time": round(time_sec, 4),
+                    "duration": round(end_sec - time_sec, 4),
+                    "midi_note": midi_note,
+                    "note_name": f"{note_name}{octave}",
+                    "frequency": round(440.0 * (2 ** ((midi_note - 69) / 12)), 2),
+                })
+
+    # Match lyrics to pitch events by closest tick
+    for lyric in vocals["lyrics"]:
+        closest = None
+        closest_dist = float("inf")
+        for pe in vocals["pitch_events"]:
+            dist = abs(pe["tick"] - lyric["tick"])
+            if dist < closest_dist:
+                closest = pe
+                closest_dist = dist
+        if closest and closest_dist < 50:  # Within ~50 ticks
+            lyric["midi_note"] = closest["midi_note"]
+            lyric["note_name"] = closest["note_name"]
+
+    return vocals
+
+
+def combine(cdlc_path: Path, ch_path: Path, stems_path: Path, output_path: Path,
+            vocals_path: Path = None):
+    """Combine CDLC, Clone Hero charts, vocals, and stems into unified package."""
     output_path.mkdir(parents=True, exist_ok=True)
 
     manifest = {
@@ -406,6 +477,92 @@ def combine(cdlc_path: Path, ch_path: Path, stems_path: Path, output_path: Path)
         manifest["sources"]["stems"] = True
         print(f"  Stems: {copied} files copied")
 
+    # 4. Parse and store vocals (from separate YARC/CH folder or from the drum chart folder)
+    vox_source = vocals_path or ch_path  # Fall back to CH folder if no separate vocals
+    if vox_source and vox_source.exists():
+        chart_file = None
+        for name in ["notes.chart", "Notes.chart"]:
+            candidate = vox_source / name
+            if candidate.exists():
+                chart_file = candidate
+                break
+
+        if chart_file:
+            # Check if chart has vocal sections
+            chart_text = chart_file.read_text(encoding="utf-8", errors="replace")
+            if "Vocals" in chart_text:
+                # Parse sync track for timing
+                chart_data = parse_chart_file(chart_file)
+                resolution = int(chart_data["metadata"].get("Resolution", 192))
+
+                vocals = parse_vocals_from_chart(
+                    chart_file,
+                    sync_track=chart_data["sync_track"],
+                    resolution=resolution,
+                )
+
+                if vocals["lyrics"] or vocals["pitch_events"]:
+                    # Auto-sync vocals to reference audio
+                    vox_sync_offset = 0.0
+                    vox_audio = None
+                    ref_audio = None
+
+                    for ext in [".ogg", ".mp3", ".wav", ".opus"]:
+                        candidate = vox_source / f"song{ext}"
+                        if candidate.exists():
+                            vox_audio = candidate
+                            break
+
+                    if stems_path:
+                        for ext in [".mp3", ".ogg", ".wav"]:
+                            for fname in ["original", "vocals", "guitar"]:
+                                candidate = stems_path / f"{fname}{ext}"
+                                if candidate.exists():
+                                    ref_audio = candidate
+                                    break
+                            if ref_audio:
+                                break
+
+                    if vox_audio and ref_audio and vox_source != ch_path:
+                        # Only sync if vocals come from a different source than drums
+                        try:
+                            from audio_sync import find_offset_chunked
+                            print(f"\n  Auto-syncing vocals: {vox_audio.name} -> {ref_audio.name}")
+                            vox_sync_offset = find_offset_chunked(str(ref_audio), str(vox_audio))
+                            print(f"  Vocal sync offset: {vox_sync_offset:+.4f}s")
+
+                            # Apply offset to lyrics and pitch events
+                            for item in vocals["lyrics"]:
+                                item["time"] = round(max(0, item["time"] - vox_sync_offset), 4)
+                            for item in vocals["pitch_events"]:
+                                item["time"] = round(max(0, item["time"] - vox_sync_offset), 4)
+                            print(f"  Applied vocal offset")
+                        except Exception as e:
+                            print(f"  Warning: Vocal auto-sync failed ({e})")
+                    elif vox_source == ch_path:
+                        # Vocals from same chart as drums — use same sync offset if available
+                        print("  Vocals from same chart as drums — shared sync")
+
+                    # Save vocal data
+                    vocals_dest = output_path / "vocals"
+                    vocals_dest.mkdir(exist_ok=True)
+
+                    ini_meta = {}
+                    ini_path = vox_source / "song.ini"
+                    if ini_path.exists():
+                        ini_meta = parse_song_ini(ini_path)
+
+                    (vocals_dest / "vocal_data.json").write_text(json.dumps({
+                        "metadata": {**chart_data["metadata"], **ini_meta},
+                        "lyrics": vocals["lyrics"],
+                        "pitch_events": vocals["pitch_events"],
+                        "sync_offset_applied": vox_sync_offset,
+                    }, indent=2))
+
+                    shutil.copy2(chart_file, vocals_dest / chart_file.name)
+                    manifest["sources"]["vocals"] = str(vox_source.name)
+                    print(f"  Vocals: {len(vocals['lyrics'])} lyrics, {len(vocals['pitch_events'])} pitch events")
+
     # Save manifest
     (output_path / "manifest.json").write_text(json.dumps(manifest, indent=2))
     print(f"\nCombined package saved to: {output_path}")
@@ -416,9 +573,10 @@ def main():
     parser = argparse.ArgumentParser(
         description="Combine CDLC + Clone Hero/YARC + stems into unified package"
     )
-    parser.add_argument("--cdlc", "-c", type=Path, help="CDLC .psarc file or folder")
-    parser.add_argument("--clonehero", "-ch", type=Path, help="Clone Hero song folder (with notes.chart)")
-    parser.add_argument("--yarc", "-y", type=Path, help="YARC song folder (same format as Clone Hero)")
+    parser.add_argument("--cdlc", "-c", type=Path, help="CDLC .psarc file or folder (guitar/bass)")
+    parser.add_argument("--clonehero", "-ch", type=Path, help="Clone Hero song folder for drums (with notes.chart)")
+    parser.add_argument("--vocals", "-v", type=Path, help="Separate vocals chart folder (YARC/CH with [ExpertVocals])")
+    parser.add_argument("--yarc", "-y", type=Path, help="YARC song folder (alias for --clonehero)")
     parser.add_argument("--stems", "-s", type=Path, help="Demucs stems folder")
     parser.add_argument("--output", "-o", required=True, type=Path, help="Output combined package folder")
     parser.add_argument("--song-name", "-n", help="Song display name (auto-detected if not given)")
@@ -427,8 +585,8 @@ def main():
     # YARC uses same format as Clone Hero
     ch_path = args.clonehero or args.yarc
 
-    if not any([args.cdlc, ch_path, args.stems]):
-        print("Error: Provide at least one source (--cdlc, --clonehero/--yarc, --stems)")
+    if not any([args.cdlc, ch_path, args.vocals, args.stems]):
+        print("Error: Provide at least one source (--cdlc, --clonehero/--yarc, --vocals, --stems)")
         return 1
 
     print(f"Combining:")
@@ -436,10 +594,12 @@ def main():
         print(f"  Guitar/Bass: {args.cdlc}")
     if ch_path:
         print(f"  Drums: {ch_path}")
+    if args.vocals:
+        print(f"  Vocals: {args.vocals}")
     if args.stems:
         print(f"  Stems: {args.stems}")
 
-    combine(args.cdlc, ch_path, args.stems, args.output)
+    combine(args.cdlc, ch_path, args.stems, args.output, vocals_path=args.vocals)
     return 0
 
 

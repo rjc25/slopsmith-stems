@@ -432,6 +432,7 @@ def setup(app, context):
             "song_key": "...",
             "cdlc_path": "/path/...",       (optional, from library)
             "clonehero_path": "/path/...",   (optional, from library)
+            "vocals_path": "/path/...",      (optional, separate vocal chart folder)
             "stems_path": "/path/...",       (optional, from library)
             "output_dir": "/path/..."        (optional, from settings)
         }
@@ -445,14 +446,15 @@ def setup(app, context):
 
         cdlc_path = data.get("cdlc_path") or song.get("cdlc_path")
         ch_path = data.get("clonehero_path") or song.get("clonehero_path")
+        vocals_path = data.get("vocals_path") or song.get("vocals_path")
         stems_path = data.get("stems_path") or song.get("stems_path")
         output_dir = data.get("output_dir") or settings.get("output_dir") or settings.get("stems_dir", "")
 
         if not output_dir:
             raise HTTPException(400, "No output directory configured.")
 
-        if not any([cdlc_path, ch_path, stems_path]):
-            raise HTTPException(400, "Need at least one source (CDLC, Clone Hero, or stems).")
+        if not any([cdlc_path, ch_path, vocals_path, stems_path]):
+            raise HTTPException(400, "Need at least one source (CDLC, Clone Hero, vocals, or stems).")
 
         try:
             from combine_charts import combine
@@ -464,9 +466,10 @@ def setup(app, context):
         try:
             cdlc = Path(cdlc_path) if cdlc_path else None
             ch = Path(ch_path) if ch_path else None
+            vocals = Path(vocals_path) if vocals_path else None
             stems = Path(stems_path) if stems_path else None
 
-            manifest = combine(cdlc, ch, stems, output_path)
+            manifest = combine(cdlc, ch, stems, output_path, vocals_path=vocals)
 
             # Update library
             if song_key in songs:

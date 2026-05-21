@@ -1,0 +1,13 @@
+{
+  "id": "drum_highway",
+  "name": "Drum Highway",
+  "version": "1.0.0",
+  "private": false,
+  "type": "visualization",
+  "description": "Clone Hero-style drum highway renderer. Displays drum lanes with colored notes matching CH/YARC styling. Supports pro drums (cymbal vs tom distinction).",
+  "script": "screen.js",
+  "routes": "routes.py",
+  "settings": {
+    "html": "settings.html"
+  }
+}

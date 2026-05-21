@@ -1,0 +1,52 @@
+<div class="p-4 space-y-4">
+  <h2 class="text-lg font-bold">Drum Highway</h2>
+  <p class="text-sm text-gray-400">
+    Clone Hero-style drum lane renderer. Displays drum charts from combined packages.
+  </p>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Songs with Drum Charts</h3>
+    <div id="drum-highway-songs" class="text-sm text-gray-400">Loading...</div>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Controls</h3>
+    <table class="text-sm">
+      <tr><td class="pr-4 font-mono">1</td><td>Easy difficulty</td></tr>
+      <tr><td class="pr-4 font-mono">2</td><td>Medium difficulty</td></tr>
+      <tr><td class="pr-4 font-mono">3</td><td>Hard difficulty</td></tr>
+      <tr><td class="pr-4 font-mono">4</td><td>Expert difficulty</td></tr>
+    </table>
+  </div>
+
+  <div>
+    <h3 class="text-sm font-medium mb-2">Lane Colors (Clone Hero)</h3>
+    <div class="flex gap-3 text-sm">
+      <span style="color:#FF8800">&#9679; Kick</span>
+      <span style="color:#FF0000">&#9679; Snare</span>
+      <span style="color:#FFFF00">&#9679; Hi-Hat</span>
+      <span style="color:#0088FF">&#9679; Blue Tom</span>
+      <span style="color:#00FF00">&#9679; Floor Tom</span>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadDrumSongs() {
+  try {
+    const resp = await fetch('/api/plugins/drum_highway/songs');
+    const data = await resp.json();
+    const el = document.getElementById('drum-highway-songs');
+    if (data.count === 0) {
+      el.textContent = 'No drum charts found. Use combine_charts.py to add Clone Hero charts.';
+    } else {
+      el.innerHTML = data.songs.map(s =>
+        `<p><strong>${s.name}</strong> — ${s.artist} (${s.difficulties.join(', ')})</p>`
+      ).join('');
+    }
+  } catch (err) {
+    document.getElementById('drum-highway-songs').textContent = 'Failed to load';
+  }
+}
+loadDrumSongs();
+</script>

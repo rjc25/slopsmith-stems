@@ -486,6 +486,81 @@ def setup(app, context):
             log.error(f"Combine failed for {song_key}: {traceback.format_exc()}")
             raise HTTPException(500, f"Combine failed: {str(e)[:300]}")
 
+    @app.post("/api/plugins/dashboard/discover")
+    async def discover_tracks(data: dict):
+        """Discover all available tracks in a chart file or CDLC.
+
+        Body: {
+            "chart_path": "/path/to/ch_folder_or_chart_file",  (optional)
+            "cdlc_path": "/path/to/song.psarc",                (optional)
+            "song_key": "..."                                   (optional, looks up from library)
+        }
+
+        Returns all sections/arrangements found with instrument guesses,
+        so the user can manually assign which track is drums, vocals, etc.
+        """
+        lib = load_library()
+        songs = lib.get("songs", {})
+
+        song_key = data.get("song_key")
+        chart_path = data.get("chart_path")
+        cdlc_path = data.get("cdlc_path")
+
+        # Look up from library if song_key provided
+        if song_key and song_key in songs:
+            song = songs[song_key]
+            if not chart_path:
+                chart_path = song.get("clonehero_path") or song.get("vocals_path")
+            if not cdlc_path:
+                cdlc_path = song.get("cdlc_path")
+
+        try:
+            import sys
+            repo_root = str(Path(__file__).resolve().parent.parent.parent)
+            if repo_root not in sys.path:
+                sys.path.insert(0, repo_root)
+            from track_discovery import discover_all
+
+            result = discover_all(
+                chart_path=Path(chart_path) if chart_path else None,
+                cdlc_path=Path(cdlc_path) if cdlc_path else None,
+            )
+            return result
+        except ImportError as e:
+            raise HTTPException(500, f"Cannot import track_discovery: {e}")
+        except Exception as e:
+            log.error(f"Discovery failed: {traceback.format_exc()}")
+            raise HTTPException(500, f"Discovery failed: {str(e)[:300]}")
+
+    @app.post("/api/plugins/dashboard/assign-tracks")
+    async def assign_tracks(data: dict):
+        """Save manual track assignments for a song.
+
+        Body: {
+            "song_key": "...",
+            "assignments": {
+                "drums": {"source": "chart", "section": "ExpertDrums"},
+                "vocals": {"source": "chart", "section": "ExpertVocals"},
+                "guitar": {"source": "cdlc", "arrangement": "Lead"},
+                "rhythm": {"source": "cdlc", "arrangement": "Rhythm"},
+                "bass": {"source": "cdlc", "arrangement": "Bass"}
+            }
+        }
+        """
+        lib = load_library()
+        songs = lib.get("songs", {})
+        song_key = data.get("song_key", "")
+        assignments = data.get("assignments", {})
+
+        if song_key not in songs:
+            raise HTTPException(404, f"Song '{song_key}' not in library")
+
+        songs[song_key]["track_assignments"] = assignments
+        lib["songs"] = songs
+        save_library(lib)
+
+        return {"success": True, "assignments": assignments}
+
     @app.post("/api/plugins/dashboard/pair")
     async def pair_songs(data: dict):
         """Pair a CDLC song with a Clone Hero song in the library.
